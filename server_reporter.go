@@ -4,8 +4,11 @@
 package grpc_prometheus
 
 import (
+	"context"
+	"github.com/prometheus/client_golang/prometheus"
 	"time"
 
+	chassisctx "github.com/90poe/service-chassis/context"
 	"google.golang.org/grpc/codes"
 )
 
@@ -38,9 +41,15 @@ func (r *serverReporter) SentMessage() {
 	r.metrics.serverStreamMsgSent.WithLabelValues(string(r.rpcType), r.serviceName, r.methodName).Inc()
 }
 
-func (r *serverReporter) Handled(code codes.Code) {
+func (r *serverReporter) Handled(ctx context.Context, code codes.Code) {
 	r.metrics.serverHandledCounter.WithLabelValues(string(r.rpcType), r.serviceName, r.methodName, code.String()).Inc()
 	if r.metrics.serverHandledHistogramEnabled {
-		r.metrics.serverHandledHistogram.WithLabelValues(string(r.rpcType), r.serviceName, r.methodName).Observe(time.Since(r.startTime).Seconds())
+		traceID, ok := chassisctx.GetTraceID(ctx)
+		if ok && traceID != "" {
+			labels := prometheus.Labels{"traceID": traceID}
+			r.metrics.serverHandledHistogram.WithLabelValues(string(r.rpcType), r.serviceName, r.methodName).(prometheus.ExemplarObserver).ObserveWithExemplar(time.Since(r.startTime).Seconds(), labels)
+		} else {
+			r.metrics.serverHandledHistogram.WithLabelValues(string(r.rpcType), r.serviceName, r.methodName).Observe(time.Since(r.startTime).Seconds())
+		}
 	}
 }

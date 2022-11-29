@@ -1,22 +1,19 @@
 # Go gRPC Interceptors for Prometheus monitoring 
 
-[![Travis Build](https://travis-ci.org/grpc-ecosystem/go-grpc-prometheus.svg)](https://travis-ci.org/grpc-ecosystem/go-grpc-prometheus)
-[![Go Report Card](https://goreportcard.com/badge/github.com/grpc-ecosystem/go-grpc-prometheus)](http://goreportcard.com/report/grpc-ecosystem/go-grpc-prometheus)
-[![GoDoc](http://img.shields.io/badge/GoDoc-Reference-blue.svg)](https://godoc.org/github.com/grpc-ecosystem/go-grpc-prometheus)
-[![SourceGraph](https://sourcegraph.com/github.com/grpc-ecosystem/go-grpc-prometheus/-/badge.svg)](https://sourcegraph.com/github.com/grpc-ecosystem/go-grpc-prometheus/?badge)
-[![codecov](https://codecov.io/gh/grpc-ecosystem/go-grpc-prometheus/branch/master/graph/badge.svg)](https://codecov.io/gh/grpc-ecosystem/go-grpc-prometheus)
-[![Slack](https://img.shields.io/badge/join%20slack-%23go--grpc--prometheus-brightgreen.svg)](https://join.slack.com/t/improbable-eng/shared_invite/enQtMzQ1ODcyMzQ5MjM4LWY5ZWZmNGM2ODc5MmViNmQ3ZTA3ZTY3NzQwOTBlMTkzZmIxZTIxODk0OWU3YjZhNWVlNDU3MDlkZGViZjhkMjc)
-[![Apache 2.0 License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+This repo is a fork of the repository https://github.com/grpc-ecosystem/go-grpc-prometheus.
 
-> :warning: We consolidating projects and moving to single repo where we have more control and awareness. We are moving this codebase for longterm to https://github.com/grpc-ecosystem/go-grpc-middleware/tree/v2. Existing state of Prometheus middleware was moved to https://github.com/grpc-ecosystem/go-grpc-middleware/tree/v2/providers/openmetrics
-If you want to change something effectively long term, I would suggest proposing PR against https://github.com/grpc-ecosystem/go-grpc-middleware/tree/v2/providers/openmetrics instead (notice `v2 `branch, not master!).
+The reason for the fork was add support for [Exemplars](https://grafana.
+com/docs/grafana/latest/fundamentals/exemplars/) which is unsupported in the original which is now in maintenance as 
+the project is trying to consolidate to https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master. 
+Unfortunately we cannot use the new library as:
 
+* There is not yet a release version for the V2 branch.
+* The version of the middleware in the release branch still does not support exemplars.
 
+Having reviewed the V2 implementation it was determined to be harder to migrate to V2 and support exemplars than to 
+fork the original and add the required support.
 
-
-[Prometheus](https://prometheus.io/) monitoring for your [gRPC Go](https://github.com/grpc/grpc-go) servers and clients.
-
-A sister implementation for [gRPC Java](https://github.com/grpc/grpc-java) (same metrics, same semantics) is in [grpc-ecosystem/java-grpc-prometheus](https://github.com/grpc-ecosystem/java-grpc-prometheus).
+## Original Documentation
 
 ## Interceptors
 
