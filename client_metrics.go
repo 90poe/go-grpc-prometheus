@@ -3,6 +3,7 @@ package grpc_prometheus
 import (
 	"context"
 	"io"
+	"sync"
 
 	prom "github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
@@ -13,6 +14,8 @@ import (
 // ClientMetrics represents a collection of metrics to be registered on a
 // Prometheus metrics registry for a gRPC client.
 type ClientMetrics struct {
+	lock sync.RWMutex
+
 	clientStartedCounter    *prom.CounterVec
 	clientHandledCounter    *prom.CounterVec
 	clientStreamMsgReceived *prom.CounterVec
@@ -29,6 +32,30 @@ type ClientMetrics struct {
 	clientStreamSendHistogramEnabled bool
 	clientStreamSendHistogramOpts    prom.HistogramOpts
 	clientStreamSendHistogram        *prom.HistogramVec
+}
+
+func (m *ClientMetrics) safeClone() *ClientMetrics {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	return &ClientMetrics{
+		clientStartedCounter:    m.clientStartedCounter,
+		clientHandledCounter:    m.clientHandledCounter,
+		clientStreamMsgReceived: m.clientStreamMsgReceived,
+		clientStreamMsgSent:     m.clientStreamMsgSent,
+
+		clientHandledHistogramEnabled: m.clientHandledHistogramEnabled,
+		clientHandledHistogramOpts:    m.clientHandledHistogramOpts,
+		clientHandledHistogram:        m.clientHandledHistogram,
+
+		clientStreamRecvHistogramEnabled: m.clientStreamRecvHistogramEnabled,
+		clientStreamRecvHistogramOpts:    m.clientStreamRecvHistogramOpts,
+		clientStreamRecvHistogram:        m.clientStreamRecvHistogram,
+
+		clientStreamSendHistogramEnabled: m.clientStreamSendHistogramEnabled,
+		clientStreamSendHistogramOpts:    m.clientStreamSendHistogramOpts,
+		clientStreamSendHistogram:        m.clientStreamSendHistogram,
+	}
 }
 
 // NewClientMetrics returns a ClientMetrics object. Use a new instance of
@@ -90,18 +117,19 @@ func NewClientMetrics(counterOpts ...CounterOption) *ClientMetrics {
 // collected by this Collector to the provided channel and returns once
 // the last descriptor has been sent.
 func (m *ClientMetrics) Describe(ch chan<- *prom.Desc) {
-	m.clientStartedCounter.Describe(ch)
-	m.clientHandledCounter.Describe(ch)
-	m.clientStreamMsgReceived.Describe(ch)
-	m.clientStreamMsgSent.Describe(ch)
-	if m.clientHandledHistogramEnabled {
-		m.clientHandledHistogram.Describe(ch)
+	c := m.safeClone()
+	c.clientStartedCounter.Describe(ch)
+	c.clientHandledCounter.Describe(ch)
+	c.clientStreamMsgReceived.Describe(ch)
+	c.clientStreamMsgSent.Describe(ch)
+	if c.clientHandledHistogramEnabled {
+		c.clientHandledHistogram.Describe(ch)
 	}
-	if m.clientStreamRecvHistogramEnabled {
-		m.clientStreamRecvHistogram.Describe(ch)
+	if c.clientStreamRecvHistogramEnabled {
+		c.clientStreamRecvHistogram.Describe(ch)
 	}
-	if m.clientStreamSendHistogramEnabled {
-		m.clientStreamSendHistogram.Describe(ch)
+	if c.clientStreamSendHistogramEnabled {
+		c.clientStreamSendHistogram.Describe(ch)
 	}
 }
 
@@ -109,24 +137,28 @@ func (m *ClientMetrics) Describe(ch chan<- *prom.Desc) {
 // metrics. The implementation sends each collected metric via the
 // provided channel and returns once the last metric has been sent.
 func (m *ClientMetrics) Collect(ch chan<- prom.Metric) {
-	m.clientStartedCounter.Collect(ch)
-	m.clientHandledCounter.Collect(ch)
-	m.clientStreamMsgReceived.Collect(ch)
-	m.clientStreamMsgSent.Collect(ch)
-	if m.clientHandledHistogramEnabled {
-		m.clientHandledHistogram.Collect(ch)
+	c := m.safeClone()
+	c.clientStartedCounter.Collect(ch)
+	c.clientHandledCounter.Collect(ch)
+	c.clientStreamMsgReceived.Collect(ch)
+	c.clientStreamMsgSent.Collect(ch)
+	if c.clientHandledHistogramEnabled {
+		c.clientHandledHistogram.Collect(ch)
 	}
-	if m.clientStreamRecvHistogramEnabled {
-		m.clientStreamRecvHistogram.Collect(ch)
+	if c.clientStreamRecvHistogramEnabled {
+		c.clientStreamRecvHistogram.Collect(ch)
 	}
-	if m.clientStreamSendHistogramEnabled {
-		m.clientStreamSendHistogram.Collect(ch)
+	if c.clientStreamSendHistogramEnabled {
+		c.clientStreamSendHistogram.Collect(ch)
 	}
 }
 
 // EnableClientHandlingTimeHistogram turns on recording of handling time of RPCs.
 // Histogram metrics can be very expensive for Prometheus to retain and query.
 func (m *ClientMetrics) EnableClientHandlingTimeHistogram(opts ...HistogramOption) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	for _, o := range opts {
 		o(&m.clientHandledHistogramOpts)
 	}
@@ -142,6 +174,9 @@ func (m *ClientMetrics) EnableClientHandlingTimeHistogram(opts ...HistogramOptio
 // EnableClientStreamReceiveTimeHistogram turns on recording of single message receive time of streaming RPCs.
 // Histogram metrics can be very expensive for Prometheus to retain and query.
 func (m *ClientMetrics) EnableClientStreamReceiveTimeHistogram(opts ...HistogramOption) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	for _, o := range opts {
 		o(&m.clientStreamRecvHistogramOpts)
 	}
@@ -159,6 +194,9 @@ func (m *ClientMetrics) EnableClientStreamReceiveTimeHistogram(opts ...Histogram
 // EnableClientStreamSendTimeHistogram turns on recording of single message send time of streaming RPCs.
 // Histogram metrics can be very expensive for Prometheus to retain and query.
 func (m *ClientMetrics) EnableClientStreamSendTimeHistogram(opts ...HistogramOption) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	for _, o := range opts {
 		o(&m.clientStreamSendHistogramOpts)
 	}
@@ -176,7 +214,8 @@ func (m *ClientMetrics) EnableClientStreamSendTimeHistogram(opts ...HistogramOpt
 // UnaryClientInterceptor is a gRPC client-side interceptor that provides Prometheus monitoring for Unary RPCs.
 func (m *ClientMetrics) UnaryClientInterceptor() func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		monitor := newClientReporter(m, Unary, method)
+		c := m.safeClone()
+		monitor := newClientReporter(c, Unary, method)
 		monitor.SentMessage()
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err == nil {
@@ -191,7 +230,8 @@ func (m *ClientMetrics) UnaryClientInterceptor() func(ctx context.Context, metho
 // StreamClientInterceptor is a gRPC client-side interceptor that provides Prometheus monitoring for Streaming RPCs.
 func (m *ClientMetrics) StreamClientInterceptor() func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		monitor := newClientReporter(m, clientStreamType(desc), method)
+		c := m.safeClone()
+		monitor := newClientReporter(c, clientStreamType(desc), method)
 		clientStream, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
 			st, _ := status.FromError(err)
